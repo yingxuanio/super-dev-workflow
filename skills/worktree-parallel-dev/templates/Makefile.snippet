@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Makefile.snippet — worktree parallel-development targets.
+# Installed/appended by the worktree skill's setup.sh (__SCRIPT__ replaced).
+
+WT_MANAGER := __SCRIPT__
+
+.PHONY: wt-init wt-list wt-status wt-verify wt-baseline wt-repair wt-clean wt-prune wt-ports wt-stop wt-doctor hooks-install
+
+wt-init: ## Register this worktree + provision isolated resources
+	@$(WT_MANAGER) init
+
+wt-list: ## List all registered worktrees
+	@$(WT_MANAGER) list
+
+wt-status: ## Show current worktree status
+	@$(WT_MANAGER) status
+
+wt-verify: ## Verify the worktree still matches its registered baseline (exit 2 = drift)
+	@$(WT_MANAGER) verify
+
+wt-baseline: ## Re-record current branch/HEAD as this worktree's baseline
+	@$(WT_MANAGER) baseline
+
+wt-repair: ## Repair git worktree metadata
+	@$(WT_MANAGER) repair
+
+wt-clean: ## Release current worktree resources (BUILD=1 also deletes build dir)
+	@$(WT_MANAGER) clean --current $(if $(BUILD),--delete-build,)
+
+wt-prune: ## Remove worktrees whose PR is merged (DRY=1 to preview)
+	@$(WT_MANAGER) prune-merged $(if $(DRY),--dry-run)
+
+wt-ports: ## Show port allocation status
+	@$(WT_MANAGER) ports
+
+wt-stop: ## Stop the process this worktree started
+	@$(WT_MANAGER) stop-current
+
+wt-doctor: ## Check the worktree installation health
+	@$(WT_MANAGER) doctor
+
+hooks-install: ## Activate the git hooks (branch guards + pre-push verify)
+	@git config core.hooksPath .githooks
+	@echo "hooks installed (core.hooksPath=.githooks)"

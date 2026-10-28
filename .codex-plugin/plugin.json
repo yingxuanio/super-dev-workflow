@@ -1,0 +1,16 @@
+{
+  "name": "super-dev-workflow",
+  "version": "1.0.0",
+  "description": "Codex plugin for isolated, parallel Git worktree development workflows.",
+  "author": {
+    "name": "Yingxuan"
+  },
+  "repository": "https://github.com/yingxuan/super-dev-workflow",
+  "license": "UNLICENSED",
+  "keywords": [
+    "worktree",
+    "parallel-development",
+    "git",
+    "agents"
+  ]
+}

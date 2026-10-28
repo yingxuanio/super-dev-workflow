@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# pre-push — the last point where cross-worktree mistakes stay private: after
+# this, the PR is open and polluted refs need force-pushes to fix. Two guards:
+#   1. branch ownership — this checkout may only push its registered branch
+#      (a session cd'd into the wrong checkout is the classic cross-task push)
+#   2. baseline integrity — `worktree-manager.sh verify` proves no outside
+#      flow moved branch HEAD/history since init; it is local-only and fast
+# Guards degrade to no-ops on old branches: missing scripts or an unregistered
+# checkout never blocks a push.
+
+ROOT_DIR="$(git rev-parse --show-toplevel)"
+cd "${ROOT_DIR}"
+
+while IFS= read -r name; do
+  unset "${name}"
+done < <(git rev-parse --local-env-vars)
+
+# shellcheck disable=SC1091
+source "${ROOT_DIR}/scripts/worktree-guard.sh" 2>/dev/null || exit 0
+
+# Drain stdin so the guards' git calls cannot consume the ref list git feeds us.
+cat >/dev/null
+
+if [ "${WT_GUARD:-1}" = "1" ] && declare -F wtguard_branch_matches_registry >/dev/null; then
+  if ! wtguard_branch_matches_registry; then
+    wtguard_journal pre-push blocked-branch-mismatch
+    exit 1
+  fi
+fi
+
+if [ -x "${ROOT_DIR}/scripts/worktree-manager.sh" ]; then
+  if ! "${ROOT_DIR}/scripts/worktree-manager.sh" verify; then
+    wtguard_journal pre-push blocked-verify-failed
+    exit 1
+  fi
+fi
+
+declare -F wtguard_journal >/dev/null 2>&1 && wtguard_journal pre-push passed
+exit 0

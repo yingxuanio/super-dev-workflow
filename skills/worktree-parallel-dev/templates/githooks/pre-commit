@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# pre-commit — worktree guards + optional project checks.
+#
+# Guards (see scripts/worktree-guard.sh):
+#   1. branch ownership  — this checkout may only commit its registered branch
+#   2. cross-task shared-file detection — a staged shared file also dirty in a
+#      sibling worktree is the fingerprint of one task sweeping another's work
+#      into this commit
+# Both degrade to no-ops for unregistered checkouts and old branches.
+#
+# Projects can extend this hook: define wt_pre_commit_extra() in
+# scripts/worktree.config.sh — it receives the list of staged files as
+# arguments and runs after the guards, before pass/fail.
+
+ROOT_DIR="$(git rev-parse --show-toplevel)"
+cd "${ROOT_DIR}"
+
+# Strip GIT_* locals inherited from the caller's environment before anything
+# else runs: a parent session's GIT_DIR/GIT_WORK_TREE can point every command
+# below at a DIFFERENT checkout, which is how hook work lands in the wrong
+# worktree. Hooks run from the repo top-level and need none of them.
+while IFS= read -r name; do
+  unset "${name}"
+done < <(git rev-parse --local-env-vars)
+
+# Per-worktree isolated environment (TMPDIR, caches) provisioned by init.
+# Existence-guarded: under `set -euo pipefail`, sourcing a MISSING file kills
+# the whole hook shell silently on macOS bash.
+[ -f "${ROOT_DIR}/.wt-env.sh" ] && source "${ROOT_DIR}/.wt-env.sh"
+
+# Project configuration (sensitive-file regex, extra hook logic).
+# shellcheck disable=SC1091
+[ -f "${ROOT_DIR}/scripts/worktree.config.sh" ] && source "${ROOT_DIR}/scripts/worktree.config.sh"
+
+# Worktree context guards, with a per-worktree journal for post-hoc diagnosis.
+# shellcheck disable=SC1091
+[ -f "${ROOT_DIR}/scripts/worktree-guard.sh" ] && source "${ROOT_DIR}/scripts/worktree-guard.sh"
+if [ "${WT_GUARD:-1}" = "1" ] && declare -F wtguard_branch_matches_registry >/dev/null; then
+  if ! wtguard_branch_matches_registry; then
+    wtguard_journal pre-commit blocked-branch-mismatch
+    exit 1
+  fi
+  if ! wtguard_no_foreign_sensitive_files; then
+    wtguard_journal pre-commit blocked-foreign-sensitive-files
+    exit 1
+  fi
+fi
+
+# Optional project-level checks on staged files.
+if declare -F wt_pre_commit_extra >/dev/null; then
+  STAGED_FILES=()
+  while IFS= read -r f; do
+    [ -n "$f" ] && STAGED_FILES+=("$f")
+  done < <(git diff --cached --name-only --diff-filter=ACMR)
+  if ! wt_pre_commit_extra "${STAGED_FILES[@]+"${STAGED_FILES[@]}"}"; then
+    wtguard_journal pre-commit blocked-project-check
+    exit 1
+  fi
+fi
+
+# Same trailing pattern as pre-push: the journal call short-circuits to
+# status 1 when worktree-guard.sh is absent, and a passing commit must not
+# inherit that status.
+declare -F wtguard_journal >/dev/null 2>&1 && wtguard_journal pre-commit passed
+exit 0
