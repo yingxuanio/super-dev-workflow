@@ -1,0 +1,103 @@
+# PR checks — the fast gate. Never signs, never notarizes, never publishes.
+#
+# Architecture (lumina standard):
+#   - PR path answers ONE question: "does this branch compile and pass the
+#     cheap checks?" The release path is a separate workflow.
+#   - Concurrency keyed on the PR number with cancel-in-progress: a new push
+#     to the same PR kills the stale run instead of queueing behind it.
+#   - Minimal permissions (contents: read) — a PR gate never needs write.
+#   - Change detection skips heavy jobs when the PR cannot have affected them.
+#   - Every job has an explicit timeout-minutes (a stuck self-hosted runner
+#     job otherwise occupies the machine indefinitely).
+#
+# Tokens (replace): __APP_NAME__ __SCHEME__ __XCODEPROJ__ __CHANGE_PATHS__
+name: PR checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  static-checks:
+    name: Static checks
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      # Workflow files are consumed by Actions itself; a YAML typo otherwise
+      # surfaces as a broken run instead of a reviewable diff.
+      - name: GitHub workflow files must parse as YAML
+        run: |
+          fail=0
+          for f in .github/workflows/*.yml .github/workflows/*.yaml; do
+            [ -e "$f" ] || continue
+            ruby -ryaml -e 'begin; YAML.load_file(ARGV[0]); rescue => e; abort "#{ARGV[0]}: #{e.message}"; end' "$f" || fail=1
+          done
+          exit $fail
+
+      # Project-specific cheap checks — keep the list in sync with what the
+      # pre-commit hook runs locally so CI and local gates agree.
+      - name: Localization resources check
+        run: |
+          if [ -x scripts/check-localization.sh ]; then
+            ./scripts/check-localization.sh
+          else
+            echo "no localization check script; skipping"
+          fi
+
+  build-debug:
+    name: Compile (Debug, unsigned)
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Skip the expensive job when the PR cannot have affected the app.
+      - name: Detect app changes
+        id: changes
+        run: |
+          if git diff --name-only "origin/${{ github.base_ref }}...HEAD" | grep -qE '__CHANGE_PATHS__'; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No app changes; skipping build."
+          fi
+
+      - name: Show Xcode version
+        if: steps.changes.outputs.changed == 'true'
+        run: xcodebuild -version
+
+      # Compile-only gate. Deliberately unsigned (CODE_SIGNING_ALLOWED=NO):
+      # signing material never reaches the PR path, and a missing/rotated
+      # certificate cannot break merges. The release workflow is the only
+      # place that proves the app still builds AND signs.
+      - name: xcodebuild (Debug)
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project __XCODEPROJ__ \
+            -scheme __SCHEME__ \
+            -configuration Debug \
+            -derivedDataPath "$RUNNER_TEMP/__APP_NAME__-dd" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build \
+            2>&1 | tee "$RUNNER_TEMP/build.log" | tail -40
+          # tee swallows the exit status of xcodebuild — re-check via the log.
+          grep -q "BUILD SUCCEEDED" "$RUNNER_TEMP/build.log" || {
+            echo "::error::Debug build failed"
+            exit 1
+          }

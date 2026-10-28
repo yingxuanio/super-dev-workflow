@@ -1,0 +1,7 @@
+# Append to the selected frpc TOML only after checking name and port conflicts.
+[[proxies]]
+name = "<service-name>"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = <local-loopback-port>
+remotePort = <confirmed-unused-remote-port>

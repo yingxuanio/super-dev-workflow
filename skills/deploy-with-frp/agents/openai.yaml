@@ -1,0 +1,4 @@
+interface:
+  display_name: "Choose Hosting and Deploy"
+  short_description: "Choose hosting, then deploy via FRP and 1Panel"
+  default_prompt: "Use $deploy-with-frp to choose the appropriate hosting target and deploy this project safely."
