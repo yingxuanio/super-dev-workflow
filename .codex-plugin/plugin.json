@@ -1,7 +1,7 @@
 {
   "name": "super-dev-workflow",
-  "version": "1.0.0",
-  "description": "Codex plugin for isolated, parallel Git worktree development workflows.",
+  "version": "1.1.0",
+  "description": "Codex plugin for Linear issue triage and isolated, parallel Git worktree development.",
   "author": {
     "name": "Yingxuan"
   },
@@ -11,6 +11,9 @@
     "worktree",
     "parallel-development",
     "git",
-    "agents"
+    "agents",
+    "linear",
+    "triage",
+    "orchestration"
   ]
 }
