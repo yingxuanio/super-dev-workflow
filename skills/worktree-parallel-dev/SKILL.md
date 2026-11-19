@@ -72,6 +72,17 @@ Make 目标：`make wt-init / wt-list / wt-status / wt-verify / wt-baseline / wt
 - **构建产物**（Xcode）：`WT_DERIVED_DATA_PATH` 指向 registry 下的私有目录，构建命令必须显式 `-derivedDataPath`，绝不碰共享 `~/Library/Developer/Xcode/DerivedData`。
 - **进程**：`stop-current` 按 registry 记录的端口定位并停止本 worktree 的进程，不误杀兄弟。
 
+### Apple 应用的本机数据与 CloudKit 隔离
+
+分别检查构建产物、运行身份、本机数据和云端环境。Git worktree、`DerivedData`、应用显示名和 `.app` 所在目录只隔离各自对应的资源。使用同一个 App Group 和 store 路径的构建会共用本机数据，使用同一个 App Group 设置套件也会共用偏好。CloudKit Development 与 Production 分开存放云端数据，本机 store 位置仍由应用配置决定。同一 CloudKit 容器、环境和 iCloud 账号下的构建，即使本机库分开，仍可能收到彼此同步的私有记录。
+
+- **日常开发包**为每个 worktree 分配稳定的标识、独立 Bundle ID、安装路径、`DerivedData`、持久化数据位置和设置套件。SwiftData 显式用 `cloudKitDatabase: .none`。无需测试扩展共享时，去掉生产 iCloud 和 App Group entitlement，并用 `groupContainer: .none` 或明确指定独立 store URL。检查主应用、小组件、分享扩展和 App Intents 的数据入口，确保读取同一套开发配置，包括首次启动时的设置迁移。需要测试扩展共享时，为同一开发包的相关 target 使用独立的开发 App Group。
+- **iOS 模拟器**用指定的 UDID 安装和运行。需要并排保留同一 Bundle ID 的多个版本时，为每个 worktree 分配自己的模拟器，同一台模拟器上后安装的同 ID 构建会更新原应用。核对项目在模拟器下的 CloudKit 开关，并在日常开发配置中显式关闭同步。
+- **CloudKit 联调**优先留一套固定的 QA 身份。参与联调的 Mac 和 iPhone 使用同一个专用 Development 容器和测试 iCloud 账号，签名和描述文件匹配目标身份，各端的 App Group 独立于正式版。需要同时验证不兼容的 schema 时，再分配第二套 QA 容器。把使用 Production 的 TestFlight 或直装包留给分发和升级验收。
+- **系统日历**单独隔离。EventKit 可直接写回系统账户，即使应用的 SwiftData 和 CloudKit 已隔离。日常预览保持日历写入关闭，联调时使用专用测试日历。
+
+验证时先检查两个最终 `.app` 的 Bundle ID、签名 entitlement、运行时实际 store URL 和设置套件。分别启动 A、B，用专用测试数据在 A 写入任务和偏好，确认 B 与正式版看不到变更，再验证两个开发包各自重启后的持久化。QA 包单独验证同一测试账号下的 Mac ↔ iPhone 同步。验收需记录各端观察到的结果，通用 `audit.sh --live` 覆盖 worktree 守卫行为，Apple 数据隔离用上述实测覆盖。
+
 ## 检查/审计一个项目
 
 ```bash
