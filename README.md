@@ -13,6 +13,7 @@ The plugin contains these skills:
 - `worktree-dev-flow`: implement in the selected worktree, verify, commit, and open a PR. Reuse a non-main worktree; create a new one from main only after confirmation.
 - `worktree-parallel-dev`: install, operate, and audit worktree isolation, branch guards, baselines, hooks, and per-worktree resources.
 - `apple-cicd-workflow`: configure and audit GitHub Actions build, signing, notarization, and release workflows for Apple apps.
+- `macos-auto-update` covers signed in-app updates for directly distributed macOS apps with Sparkle or Tauri, GitHub Actions, and Cloudflare R2.
 - `deploy-with-frp`: choose a hosting target and deploy, update, troubleshoot, or remove services through FRP and 1Panel.
 
 ## Repository layout
@@ -24,6 +25,7 @@ skills/orchestration-dev-dispatch/
 skills/worktree-dev-flow/
 skills/worktree-parallel-dev/
 skills/apple-cicd-workflow/
+skills/macos-auto-update/
 skills/deploy-with-frp/
 ```
 

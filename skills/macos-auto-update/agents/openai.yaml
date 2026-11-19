@@ -1,0 +1,4 @@
+interface:
+  display_name: "macOS 应用自动更新"
+  short_description: "Ship signed macOS updates with Actions and R2"
+  default_prompt: "用 $macos-auto-update 给这个 macOS 应用接入签名自动更新，并验证 GitHub Actions 到 R2 的发布流程。"
